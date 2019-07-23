@@ -1173,7 +1173,6 @@ class Instagram
      * @param int $pageSize Internal page size for pagination
      * @param bool $delayed Use random delay between requests to mimic browser behaviour
      *
-     * @return array
      * @throws InstagramException
      */
     public function getFollowers($accountId, $count = 20, $pageSize = 20, $delayed = true)
@@ -1183,7 +1182,6 @@ class Instagram
         }
 
         $index = 0;
-        $accounts = [];
         $endCursor = '';
 
         if ($count < $pageSize) {
@@ -1200,7 +1198,7 @@ class Instagram
             $jsonResponse = $this->decodeRawBodyToJson($response->raw_body);
 
             if ($jsonResponse['data']['user']['edge_followed_by']['count'] === 0) {
-                return $accounts;
+                break;
             }
 
             $edgesArray = $jsonResponse['data']['user']['edge_followed_by']['edges'];
@@ -1209,7 +1207,7 @@ class Instagram
             }
 
             foreach ($edgesArray as $edge) {
-                $accounts[] = $edge['node'];
+                yield $edge['node'];
                 $index++;
                 if ($index >= $count) {
                     break 2;
@@ -1229,7 +1227,6 @@ class Instagram
                 usleep($microsec);
             }
         }
-        return $accounts;
     }
 
     /**
@@ -1238,7 +1235,6 @@ class Instagram
      * @param int $pageSize Internal page size for pagination
      * @param bool $delayed Use random delay between requests to mimic browser behaviour
      *
-     * @return array
      * @throws InstagramException
      */
     public function getFollowing($accountId, $count = 20, $pageSize = 20, $delayed = true)
@@ -1248,7 +1244,6 @@ class Instagram
         }
 
         $index = 0;
-        $accounts = [];
         $endCursor = '';
 
         if ($count < $pageSize) {
@@ -1266,7 +1261,7 @@ class Instagram
             $jsonResponse = $this->decodeRawBodyToJson($response->raw_body);
 
             if ($jsonResponse['data']['user']['edge_follow']['count'] === 0) {
-                return $accounts;
+                break;
             }
 
             $edgesArray = $jsonResponse['data']['user']['edge_follow']['edges'];
@@ -1275,7 +1270,7 @@ class Instagram
             }
 
             foreach ($edgesArray as $edge) {
-                $accounts[] = $edge['node'];
+                yield $edge['node'];
                 $index++;
                 if ($index >= $count) {
                     break 2;
@@ -1295,7 +1290,6 @@ class Instagram
                 usleep($microsec);
             }
         }
-        return $accounts;
     }
 
     /**
