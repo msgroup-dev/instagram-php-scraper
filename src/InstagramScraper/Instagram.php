@@ -1227,6 +1227,7 @@ class Instagram
                 usleep($microsec);
             }
         }
+        return [];
     }
 
     /**
@@ -1290,6 +1291,8 @@ class Instagram
                 usleep($microsec);
             }
         }
+
+        return [];
     }
 
     /**
