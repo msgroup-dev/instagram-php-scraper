@@ -1167,6 +1167,41 @@ class Instagram
         return Location::create($jsonResponse['graphql']['location']);
     }
 
+    public function getFollowersPage($accountId, $pageSize, $cursor = null)
+    {
+        $url = Endpoints::getFollowersJsonLink($accountId, $pageSize, $cursor);
+
+        $response = Request::get($url, $this->generateHeaders($this->userSession));
+
+        $this->userSession = array_merge($this->userSession, $this->parseCookies($response->headers));
+
+        if ($response->code !== static::HTTP_OK) {
+            throw new InstagramException('Response code is ' . $response->code . '. Body: ' . static::getErrorBody($response->body) . ' Something went wrong. Please report issue.', $response->code);
+        }
+
+        $jsonResponse = $this->decodeRawBodyToJson($response->raw_body);
+
+        if ($jsonResponse['data']['user']['edge_followed_by']['count'] === 0) {
+            return null;
+        }
+
+        $edgesArray = $jsonResponse['data']['user']['edge_followed_by']['edges'];
+        if (count($edgesArray) === 0) {
+            throw new InstagramException('Failed to get followers of account id ' . $accountId . '. The account is private.', static::HTTP_FORBIDDEN);
+        }
+
+        foreach ($edgesArray as $edge) {
+            yield $edge['node'];
+        }
+
+        $pageInfo = $jsonResponse['data']['user']['edge_followed_by']['page_info'];
+        if ($pageInfo['has_next_page']) {
+            return $pageInfo['end_cursor'];
+        } else {
+            return null;
+        }
+    }
+
     /**
      * @param string $accountId Account id of the profile to query
      * @param int $count Total followers to retrieve
@@ -1182,43 +1217,21 @@ class Instagram
         }
 
         $index = 0;
-        $endCursor = '';
+        $cursor = '';
 
         if ($count < $pageSize) {
             throw new InstagramException('Count must be greater than or equal to page size.');
         }
 
-        while (true) {
-            $response = Request::get(Endpoints::getFollowersJsonLink($accountId, $pageSize, $endCursor),
-                $this->generateHeaders($this->userSession));
-            if ($response->code !== static::HTTP_OK) {
-                throw new InstagramException('Response code is ' . $response->code . '. Body: ' . static::getErrorBody($response->body) . ' Something went wrong. Please report issue.', $response->code);
-            }
+        do {
 
-            $jsonResponse = $this->decodeRawBodyToJson($response->raw_body);
+            $data = $this->getFollowersPage($accountId, $pageSize, $cursor);
 
-            if ($jsonResponse['data']['user']['edge_followed_by']['count'] === 0) {
-                break;
-            }
-
-            $edgesArray = $jsonResponse['data']['user']['edge_followed_by']['edges'];
-            if (count($edgesArray) === 0) {
-                throw new InstagramException('Failed to get followers of account id ' . $accountId . '. The account is private.', static::HTTP_FORBIDDEN);
-            }
-
-            foreach ($edgesArray as $edge) {
-                yield $edge['node'];
-                $index++;
-                if ($index >= $count) {
-                    break 2;
+            foreach ($data as $user) {
+                yield $user;
+                if(++$index >= $count) {
+                    return;
                 }
-            }
-
-            $pageInfo = $jsonResponse['data']['user']['edge_followed_by']['page_info'];
-            if ($pageInfo['has_next_page']) {
-                $endCursor = $pageInfo['end_cursor'];
-            } else {
-                break;
             }
 
             if ($delayed) {
@@ -1226,8 +1239,9 @@ class Instagram
                 $microsec = rand($this->pagingDelayMinimumMicrosec, $this->pagingDelayMaximumMicrosec);
                 usleep($microsec);
             }
-        }
-        return [];
+
+        } while ($cursor = $data->getReturn());
+
     }
 
     /**
@@ -1291,8 +1305,6 @@ class Instagram
                 usleep($microsec);
             }
         }
-
-        return [];
     }
 
     /**
